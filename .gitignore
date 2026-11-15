@@ -1,0 +1,30 @@
+# Runtime data and generated outputs
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+
+# Python and Spark runtime state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.streamlit/
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor/OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

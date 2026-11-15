@@ -1,0 +1,79 @@
+name: network-intrusion-bigdata-analytics
+
+services:
+  spark-master:
+    image: apache/spark:3.5.6
+    user: "0:0"
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["/opt/spark/sbin/start-master.sh && tail -f /dev/null"]
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ./data:/workspace/data
+      - ./artifacts:/workspace/artifacts
+    mem_limit: 1g
+    cpus: 1.0
+
+  spark-worker:
+    image: apache/spark:3.5.6
+    user: "0:0"
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["/opt/spark/sbin/start-worker.sh spark://spark-master:7077 && tail -f /dev/null"]
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/workspace/data
+      - ./artifacts:/workspace/artifacts
+    mem_limit: 4g
+    cpus: 3.0
+
+  analytics:
+    build:
+      context: .
+      dockerfile: docker/analytics.Dockerfile
+    profiles: ["jobs"]
+    depends_on:
+      - spark-master
+      - spark-worker
+    entrypoint: ["/opt/spark/bin/spark-submit"]
+    command:
+      - --master
+      - spark://spark-master:7077
+      - --conf
+      - spark.driver.memory=1g
+      - --conf
+      - spark.executor.memory=2g
+      - --conf
+      - spark.executor.cores=2
+      - /workspace/processing/smoke_test.py
+      - --output-path
+      - /workspace/artifacts/smoke_parquet
+    volumes:
+      - ./:/workspace
+    mem_limit: 2g
+    cpus: 2.0
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/dashboard.Dockerfile
+    depends_on:
+      - spark-master
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./:/app:ro
+    environment:
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SMOKE_PARQUET_PATH: /app/artifacts/smoke_parquet
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 512m
+    cpus: 1.0
