@@ -145,6 +145,19 @@ Open `http://localhost:8501` for the dashboard, `http://localhost:9870` for HDFS
 
 The Hadoop profile first runs a root-only volume initializer, then starts Hadoop as its normal user. The NameNode formats only an empty `hadoop_name` volume. If it reports a nonempty directory without `current/VERSION`, do not delete or reformat the volume: inspect it first with `docker compose --profile hadoop run --rm --no-deps --entrypoint bash hadoop-init -lc "find /data/dfs/name -maxdepth 3 -ls"`.
 
+### Live Hadoop category demonstration
+
+This runs only the native Java `unsw-category` job against the four original HDFS CSVs. It compiles the existing source inside the existing `hadoop-jobs` image and writes to a new `/data/unsw/demo/category-<timestamp>-<pid>` directory; it never changes `/data/unsw/out/category` or local artifacts.
+
+```powershell
+Set-Location C:\path\to\network-intrusion-bigdata-analytics
+docker compose --profile hadoop up -d namenode datanode resourcemanager nodemanager
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\demo\Run-HadoopCategoryDemo.ps1
+```
+
+The script streams Hadoop progress, prints the YARN application ID and category counts, then verifies 2,540,047 total flows, 2,218,764 normal flows, and 321,283 observed attack-labelled flows. It fails before submission if Docker, HDFS, YARN, or any original input file is unavailable.
+
 ```powershell
 Compress-Archive -Path compose.yaml,.dockerignore,docker,hadoop,hadoop-conf,processing,reference,r,sql,tests,dashboard,requirements,docs,README.md,.gitignore -DestinationPath ..\network-intrusion-bigdata-analytics-source.zip -Force
 ```
