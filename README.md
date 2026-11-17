@@ -158,6 +158,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 The script streams Hadoop progress, prints the YARN application ID and category counts, then verifies 2,540,047 total flows, 2,218,764 normal flows, and 321,283 observed attack-labelled flows. It fails before submission if Docker, HDFS, YARN, or any original input file is unavailable.
 
+### Interactive Spark SQL demonstration
+
+```powershell
+docker compose up -d spark-master spark-worker
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\demo\Start-SparkSQL.ps1
+```
+
+This starts one read-only SparkSession over canonical Parquet as `network_flows`; it does not run ETL or alter outputs. Type `HELP`, `SCHEMA`, `TABLES`, `CLEAR`, or `EXIT`, and terminate SQL with `;`. See [demo/SparkSQL-CheatSheet.md](demo/SparkSQL-CheatSheet.md).
+
 ```powershell
 Compress-Archive -Path compose.yaml,.dockerignore,docker,hadoop,hadoop-conf,processing,reference,r,sql,tests,dashboard,requirements,docs,README.md,.gitignore -DestinationPath ..\network-intrusion-bigdata-analytics-source.zip -Force
 ```
