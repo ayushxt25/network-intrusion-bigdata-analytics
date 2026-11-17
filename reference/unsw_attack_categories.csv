@@ -1,0 +1,10 @@
+attack_cat,reference_source
+Analysis,UNSW-NB15 published attack taxonomy
+Backdoor,UNSW-NB15 published attack taxonomy
+DoS,UNSW-NB15 published attack taxonomy
+Exploits,UNSW-NB15 published attack taxonomy
+Fuzzers,UNSW-NB15 published attack taxonomy
+Generic,UNSW-NB15 published attack taxonomy
+Reconnaissance,UNSW-NB15 published attack taxonomy
+Shellcode,UNSW-NB15 published attack taxonomy
+Worms,UNSW-NB15 published attack taxonomy

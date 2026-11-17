@@ -1,17 +1,17 @@
 # Large-Scale Network Intrusion Analytics and Attack Pattern Discovery
 
-Phase 1 provides a reproducible local Spark foundation: one standalone Spark master, one worker, a one-shot distributed smoke job, and a Streamlit health page. No Hadoop, Hive, Kafka, ML, database, dataset ingestion, analytical dashboard, or benchmarks are included yet.
+Reproducible local project for UNSW-NB15 network-flow analytics: Dockerized Spark SQL/Parquet ETL and analytics, native Hadoop MapReduce/HDFS/YARN aggregates, R summaries, benchmarks, and a Streamlit dashboard backed only by precomputed artifacts. It does not use ML, Hive, Kafka, or a database service.
 
 ## Prerequisites
 
 - Windows 10/11 with Docker Desktop running in Linux-container mode.
-- Allocate Docker Desktop 8 GB RAM and 8 CPUs when available; this Compose stack caps its services at 7.5 GB and 7 CPUs.
+- Allocate Docker Desktop about 12 GB RAM and 8 CPUs when available. Run Spark and Hadoop *jobs* sequentially on a 16 GB host; their persistent services may coexist.
 - Git is optional. No host Spark, Hadoop, Hive, Java, or Python packages are required for the Docker workflow.
 
 ## Start services (PowerShell)
 
 ```powershell
-Set-Location C:\Users\ayush\OneDrive\Desktop\network-intrusion-bigdata-analytics
+Set-Location C:\path\to\network-intrusion-bigdata-analytics
 docker compose up -d --build spark-master spark-worker dashboard
 docker compose ps
 ```
@@ -52,12 +52,21 @@ docker compose --profile jobs run --rm --entrypoint /opt/spark/bin/spark-submit 
 
 ```powershell
 docker compose ps
-Invoke-WebRequest http://localhost:8501/_stcore/health
-Invoke-WebRequest http://localhost:8080
+curl.exe -fsS http://localhost:8501/_stcore/health
+curl.exe -fsS http://localhost:8080
 docker compose logs --tail=100 dashboard
 ```
 
-The dashboard reports whether the synthetic Parquet fixture exists. It intentionally does not query a dataset or render charts in Phase 1.
+The dashboard reads bounded, precomputed Spark analytical artifacts. It does not scan raw CSV, Parquet, HDFS, or run Spark/Hadoop jobs at request time.
+
+## Dashboard demonstration
+
+```powershell
+docker compose up -d --build dashboard
+curl.exe -fsS http://localhost:8501/_stcore/health
+# Open http://localhost:8501. The dashboard reads only artifacts/analytics/.
+docker compose exec dashboard python tests/test_dashboard_contract.py
+```
 
 ## Phase 2A: UNSW-NB15 acquisition and validation
 
@@ -90,10 +99,54 @@ Outputs: `data/processed/unsw_nb15/` (partitioned by validated `event_date`), `a
 
 Observed source-release note: this downloaded file set has 2,540,047 rows, not the UNSW-published 2,540,044. Physical line counts are 700,001 in each of files 1–3 and 440,044 in file 4; the three surplus rows are valid parsed rows, not headers or malformed records. The ETL preserves them. Its 480,633 duplicate figure is exact full-row duplication across the 49 raw fields; duplicates are reported but never removed. Category rules trim whitespace, map `Backdoors` to `Backdoor`, and map `None`/null-like categories to `Normal` only when `label=0`.
 
+## Phase 3: Spark SQL analytics
+
+The analytics runner registers canonical Parquet as `flows` and the [UNSW category taxonomy](reference/unsw_attack_categories.csv) as a documented reference view. It writes bounded Snappy Parquet results and a manifest; it performs no ML or dashboard update.
+
+```powershell
+docker compose --profile jobs run --rm --entrypoint /opt/spark/bin/spark-submit analytics --master spark://spark-master:7077 /workspace/processing/run_analytics.py --input /workspace/data/processed/unsw_nb15 --output /workspace/artifacts/analytics --top-n 200
+docker compose --profile jobs run --rm --entrypoint /opt/spark/bin/spark-submit analytics --master local[2] /workspace/tests/test_analytics.py
+```
+
+SQL files cover label/category distribution; taxonomy join and protocol/service breakdown; endpoint concentration; time trends; five-minute window bursts; flow/byte/packet/load statistics; repeated communications; and evidence-only suspicious rules. Results are under `artifacts/analytics/`; inspect `analytics_manifest.json` for definitions and row counts. `label=1` is an observed dataset label. Rules identify only inferred suspicious behaviour and never relabel a flow as an attack.
+
 ## Stop services
 
 ```powershell
 docker compose down
+```
+
+## Hadoop MapReduce, R, and presentation run
+
+```powershell
+docker compose --profile hadoop up -d namenode datanode resourcemanager nodemanager
+docker compose --profile hadoop ps
+docker compose --profile hadoop run --rm hadoop-jobs
+docker compose --profile r run --rm r-analysis
+docker compose --profile jobs run --rm --entrypoint /opt/spark/bin/spark-submit analytics --master spark://spark-master:7077 /workspace/processing/run_analytics.py
+```
+
+HDFS UI: `http://localhost:9870`; YARN UI: `http://localhost:8088`. Hadoop outputs are copied to ignored `artifacts/hadoop/`; R creates graphs and JSON only after those aggregates exist. On 16 GB RAM, run Hadoop services and Spark jobs sequentially. Source-only ZIP:
+
+### Final demonstration (uses existing artifacts; does not rerun processing)
+
+```powershell
+Set-Location C:\path\to\network-intrusion-bigdata-analytics
+docker compose --profile hadoop up -d namenode datanode resourcemanager nodemanager
+docker compose up -d spark-master spark-worker dashboard
+docker compose ps
+curl.exe -fsS http://localhost:8501/_stcore/health
+docker compose exec namenode hdfs dfs -test -e /data/unsw/out/category/_SUCCESS
+docker compose exec resourcemanager yarn node -list
+docker compose exec dashboard python tests/test_dashboard_contract.py
+```
+
+Open `http://localhost:8501` for the dashboard, `http://localhost:9870` for HDFS, `http://localhost:8088` for YARN, and `http://localhost:8080` for Spark. Do not run ETL, analytics, MapReduce, R, or benchmarks during this demonstration unless intentionally regenerating their ignored outputs.
+
+The Hadoop profile first runs a root-only volume initializer, then starts Hadoop as its normal user. The NameNode formats only an empty `hadoop_name` volume. If it reports a nonempty directory without `current/VERSION`, do not delete or reformat the volume: inspect it first with `docker compose --profile hadoop run --rm --no-deps --entrypoint bash hadoop-init -lc "find /data/dfs/name -maxdepth 3 -ls"`.
+
+```powershell
+Compress-Archive -Path compose.yaml,.dockerignore,docker,hadoop,hadoop-conf,processing,reference,r,sql,tests,dashboard,requirements,docs,README.md,.gitignore -DestinationPath ..\network-intrusion-bigdata-analytics-source.zip -Force
 ```
 
 ## Layout
